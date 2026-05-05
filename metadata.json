@@ -1,0 +1,6 @@
+{
+  "name": "Transparência de Pagamentos",
+  "description": "App para gestão de vendas, controle de pagamentos e transparência de saldo devedor entre vendedor e cliente.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
