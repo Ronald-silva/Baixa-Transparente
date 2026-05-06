@@ -2,7 +2,6 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
-import firebaseRulesPlugin from '@firebase/eslint-plugin-security-rules'
 
 export default tseslint.config(
   { ignores: ['dist'] },
@@ -22,15 +21,24 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
-    },
-  },
-  {
-    files: ['**/*.rules'],
-    plugins: {
-      '@firebase/security-rules': firebaseRulesPlugin,
-    },
-    rules: {
-      ...firebaseRulesPlugin.configs.recommended.rules,
+      // Regras de segurança
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-script-url': 'error',
+      
+      // Regras de qualidade de código
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/prefer-const': 'error',
+      
+      // Regras de React
+      'react-hooks/exhaustive-deps': 'warn',
+      
+      // Regras gerais
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'prefer-const': 'error',
+      'no-var': 'error',
     },
   }
 )

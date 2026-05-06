@@ -1,22 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './database';
-import { User, Venda, Pagamento, UserRole, Notification as NotificationType } from './types';
+import { User, Venda, Pagamento, Notification as NotificationType } from './types';
 import { createNotification } from './notifications';
-import { 
-  LogOut, 
-  Users, 
-  Receipt, 
-  DollarSign, 
-  TrendingDown,
-  TrendingUp,
+import { masks } from './utils/masks';
+import { MaskedInput } from './components/ui/MaskedInput';
+import { useFormValidation, commonValidationRules } from './hooks/useFormValidation';
+import {
+  LogOut,
+  Receipt,
   Search,
   X,
   CheckCircle,
   AlertCircle,
-  CreditCard,
-  Plus,
   Sparkles,
-  ArrowRight
+  ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -64,24 +61,51 @@ const NotificationToast = ({ notification, onClose }: { notification: Notificati
 };
 
 const LoginPage = ({ onLogin, onNotify }: { onLogin: (user: User) => void; onNotify: (msg: string, type: 'success' | 'error' | 'info') => void }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const { errors, validateForm, validateSingleField, touchField } = useFormValidation({
+    email: commonValidationRules.email,
+    password: [{ required: true, message: 'Senha é obrigatória' }]
+  });
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    if (!validateForm(formData)) {
+      onNotify('Por favor, corrija os erros no formulário', 'error');
+      return;
+    }
+
     setLoading(true);
 
-    const user = await auth.login(email, password);
-    
-    if (user) {
-      onNotify('Login realizado com sucesso!', 'success');
-      onLogin(user as User);
-    } else {
-      onNotify('Email ou senha incorretos', 'error');
+    try {
+      const user = await auth.login(formData.email, formData.password);
+      
+      if (user) {
+        onNotify('Login realizado com sucesso!', 'success');
+        onLogin(user as User);
+      } else {
+        onNotify('Email ou senha incorretos', 'error');
+      }
+    } catch (error: any) {
+      onNotify(error.message || 'Erro ao fazer login', 'error');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
     
-    setLoading(false);
+    touchField(field);
+    validateSingleField(field, value);
   };
 
   return (
@@ -115,27 +139,45 @@ const LoginPage = ({ onLogin, onNotify }: { onLogin: (user: User) => void; onNot
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-white/50 font-semibold ml-1">Email</label>
+              <label className="text-xs uppercase tracking-wider text-white/50 font-semibold ml-1">
+                Email <span className="text-rose-400">*</span>
+              </label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={formData.email}
+                onChange={(e) => handleFieldChange('email', e.target.value.toLowerCase())}
                 placeholder="seu@email.com"
-                required
-                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20"
+                className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+                  errors.email ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+                }`}
               />
+              {errors.email && (
+                <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+                  {errors.email}
+                </p>
+              )}
             </div>
             
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-white/50 font-semibold ml-1">Senha</label>
+              <label className="text-xs uppercase tracking-wider text-white/50 font-semibold ml-1">
+                Senha <span className="text-rose-400">*</span>
+              </label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={formData.password}
+                onChange={(e) => handleFieldChange('password', e.target.value)}
                 placeholder="••••••••"
-                required
-                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20"
+                className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+                  errors.password ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+                }`}
               />
+              {errors.password && (
+                <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+                  {errors.password}
+                </p>
+              )}
             </div>
             
             <motion.button
@@ -175,51 +217,8 @@ const LoginPage = ({ onLogin, onNotify }: { onLogin: (user: User) => void; onNot
 // Componentes do Dashboard
 // ============================================
 
-const StatCard = ({ label, value, progress, isCritical }: { label: string; value: number; progress?: number; isCritical?: boolean }) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    whileHover={{ y: -5, scale: 1.02 }}
-    transition={{ type: 'spring', stiffness: 300 }}
-    className="group relative overflow-hidden rounded-2xl border border-white/10 hover:border-[#c5a059]/40 bg-gradient-to-br from-white/[0.04] to-white/[0.01] backdrop-blur-xl p-6 shadow-2xl shadow-black/40 transition-all duration-300"
-  >
-    {/* Hover gradient effect */}
-    <div className="absolute inset-0 bg-gradient-to-br from-[#c5a059]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-    
-    <div className="relative z-10">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs uppercase tracking-wider text-white/40 font-semibold">{label}</p>
-        {isCritical && (
-          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-        )}
-      </div>
-      
-      <p className="text-3xl font-bold font-serif tracking-tight bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent mb-3">
-        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-      </p>
-      
-      {progress !== undefined && (
-        <div className="mt-4 h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min(progress, 100)}%` }}
-            transition={{ duration: 1, ease: 'easeOut' }}
-            className="h-full bg-gradient-to-r from-[#c5a059] to-[#d4af37] rounded-full"
-          />
-        </div>
-      )}
 
-      {isCritical && (
-        <p className="text-xs uppercase tracking-wider text-amber-400 mt-3 font-semibold flex items-center gap-2">
-          <AlertCircle size={12} />
-          Ações necessárias
-        </p>
-      )}
-    </div>
-  </motion.div>
-);
-
-const RecentList = ({ title, items, type }: { title: string; items: any[]; type: 'venda' | 'pagamento' }) => (
+const RecentList = ({ title, items, type, context = 'vendor' }: { title: string; items: any[]; type: 'venda' | 'pagamento'; context?: 'vendor' | 'customer' }) => (
   <motion.div 
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -228,9 +227,22 @@ const RecentList = ({ title, items, type }: { title: string; items: any[]; type:
     <div className="flex justify-between items-center mb-6">
       <h3 className="text-sm uppercase tracking-wider text-white font-bold">{title}</h3>
       {items.length > 0 && (
-        <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-white/50 font-semibold">
-          {items.length} {items.length === 1 ? 'Registro' : 'Registros'}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-white/50 font-semibold">
+            {items.length} {items.length === 1 ? 'Registro' : 'Registros'}
+          </span>
+          <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+            type === 'pagamento'
+              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+              : context === 'customer'
+              ? 'bg-white/5 text-white/50 border border-white/10'
+              : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+          }`}>
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+              items.reduce((sum, item) => sum + Number(type === 'venda' ? item.valor_total : item.valor_pago), 0)
+            )}
+          </span>
+        </div>
       )}
     </div>
     
@@ -254,17 +266,40 @@ const RecentList = ({ title, items, type }: { title: string; items: any[]; type:
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white/90 truncate uppercase tracking-wide">
-                    {item.descricao}
-                  </p>
-                  <p className="text-xs text-white/40 mt-1">
-                    {new Date(item.created_at || item.paid_at).toLocaleDateString('pt-BR')}
-                  </p>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-3 h-3 rounded-full ${
+                      type === 'pagamento' ? 'bg-green-500' : context === 'customer' ? 'bg-white/40' : 'bg-blue-500'
+                    }`}></div>
+                    <p className="text-sm font-semibold text-white/90 truncate uppercase tracking-wide">
+                      {item.descricao}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-white/40">
+                    <span>{new Date(item.created_at || item.paid_at).toLocaleDateString('pt-BR')}</span>
+                    {item.status && context === 'vendor' && (
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        item.status === 'paga'
+                          ? 'bg-green-500/10 text-green-400'
+                          : item.status === 'parcial'
+                          ? 'bg-amber-500/10 text-amber-400'
+                          : 'bg-red-500/10 text-red-400'
+                      }`}>
+                        {item.status === 'paga' ? 'Paga' : item.status === 'parcial' ? 'Parcial' : 'Pendente'}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className={`text-right font-bold ${type === 'pagamento' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  <p className="text-lg font-serif">
-                    {type === 'pagamento' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(type === 'venda' ? item.valor_total : item.valor_pago)}
-                  </p>
+                <div className="text-right">
+                  <div className={`text-lg font-bold font-mono ${
+                    type === 'pagamento' ? 'text-green-400' : context === 'customer' ? 'text-white/80' : 'text-blue-400'
+                  }`}>
+                    {type === 'pagamento' ? '+' : ''} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(type === 'venda' ? item.valor_total : item.valor_pago)}
+                  </div>
+                  <div className="text-xs text-white/40">
+                    {type === 'pagamento'
+                      ? (context === 'customer' ? 'Pago' : 'Recebido')
+                      : (context === 'customer' ? 'Comprado' : 'A receber')}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -317,7 +352,6 @@ function VendorDashboard({ user, onNotify }: { user: User; onNotify: (msg: strin
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [clientes, setClientes] = useState<any[]>([]);
-  const [dashboard, setDashboard] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
   const [showAddVenda, setShowAddVenda] = useState(false);
@@ -332,17 +366,16 @@ function VendorDashboard({ user, onNotify }: { user: User; onNotify: (msg: strin
   const loadData = async () => {
     setLoading(true);
     try {
-      const [vendasData, pagamentosData, clientesData, dashboardData] = await Promise.all([
+      const [vendasData, pagamentosData, clientesData] = await Promise.all([
         db.getVendasByVendedor(user.id),
         db.getPagamentosByVendedor(user.id),
-        db.getClientesByVendedor(user.id),
-        db.getVendorDashboard(user.id)
+        db.getClientesByVendedor(user.id)
       ]);
       
       setVendas(vendasData as Venda[]);
       setPagamentos(pagamentosData as Pagamento[]);
       setClientes(clientesData);
-      setDashboard(dashboardData);
+      
     } catch (error) {
       onNotify('Erro ao carregar dados', 'error');
     } finally {
@@ -384,21 +417,186 @@ function VendorDashboard({ user, onNotify }: { user: User; onNotify: (msg: strin
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          label={selectedClientId === '' ? "Total a Receber" : "Total Comprado (Cliente)"} 
-          value={currentStats.total_vendido} 
-          progress={(currentStats.total_recebido / (currentStats.total_vendido || 1)) * 100}
-        />
-        <StatCard 
-          label={selectedClientId === '' ? "Liquidez Recebida" : "Total Pago (Cliente)"} 
-          value={currentStats.total_recebido} 
-        />
-        <StatCard 
-          label="Saldo Pendente" 
-          value={currentStats.saldo_pendente} 
-          isCritical={currentStats.saldo_pendente > 0}
-        />
+        {/* Total a Receber */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileHover={{ y: -5, scale: 1.02 }}
+          transition={{ type: 'spring', stiffness: 300 }}
+          className="group relative overflow-hidden rounded-2xl border border-white/10 hover:border-[#c5a059]/40 bg-gradient-to-br from-blue-500/10 to-blue-600/5 backdrop-blur-xl p-6 shadow-2xl shadow-black/40 transition-all duration-300"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+                <p className="text-xs uppercase tracking-wider text-white/60 font-semibold">Total a Receber</p>
+              </div>
+              <Receipt size={20} className="text-blue-400" />
+            </div>
+            
+            <p className="text-3xl font-bold font-mono tracking-tight bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent mb-3">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentStats.total_vendido)}
+            </p>
+            
+            <div className="text-xs text-white/40">
+              {vendas.length} {vendas.length === 1 ? 'venda registrada' : 'vendas registradas'}
+            </div>
+            
+            {currentStats.total_vendido > 0 && (
+              <div className="mt-4 h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((currentStats.total_recebido / currentStats.total_vendido) * 100, 100)}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"
+                />
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Total Recebido */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileHover={{ y: -5, scale: 1.02 }}
+          transition={{ type: 'spring', stiffness: 300, delay: 0.1 }}
+          className="group relative overflow-hidden rounded-2xl border border-white/10 hover:border-green-500/40 bg-gradient-to-br from-green-500/10 to-green-600/5 backdrop-blur-xl p-6 shadow-2xl shadow-black/40 transition-all duration-300"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full bg-green-500"></div>
+                <p className="text-xs uppercase tracking-wider text-white/60 font-semibold">Já Recebido</p>
+              </div>
+              <CheckCircle size={20} className="text-green-400" />
+            </div>
+            
+            <p className="text-3xl font-bold font-mono tracking-tight text-green-400 mb-3">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentStats.total_recebido)}
+            </p>
+            
+            <div className="text-xs text-white/40">
+              {pagamentos.length} {pagamentos.length === 1 ? 'pagamento recebido' : 'pagamentos recebidos'}
+            </div>
+            
+            {currentStats.total_vendido > 0 && (
+              <div className="text-xs text-green-400 mt-2 font-semibold">
+                {Math.round((currentStats.total_recebido / currentStats.total_vendido) * 100)}% recebido
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Saldo Pendente */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileHover={{ y: -5, scale: 1.02 }}
+          transition={{ type: 'spring', stiffness: 300, delay: 0.2 }}
+          className={`group relative overflow-hidden rounded-2xl border backdrop-blur-xl p-6 shadow-2xl shadow-black/40 transition-all duration-300 ${
+            currentStats.saldo_pendente > 0 
+              ? 'border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-amber-600/5 hover:border-amber-500/60' 
+              : 'border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] hover:border-green-500/40'
+          }`}
+        >
+          <div className={`absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${
+            currentStats.saldo_pendente > 0 ? 'from-amber-500/10 to-transparent' : 'from-green-500/10 to-transparent'
+          }`}></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full ${
+                  currentStats.saldo_pendente > 0 ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
+                }`}></div>
+                <p className="text-xs uppercase tracking-wider text-white/60 font-semibold">Saldo Pendente</p>
+              </div>
+              {currentStats.saldo_pendente > 0 ? (
+                <AlertCircle size={20} className="text-amber-400" />
+              ) : (
+                <CheckCircle size={20} className="text-green-400" />
+              )}
+            </div>
+            
+            <p className={`text-3xl font-bold font-mono tracking-tight mb-3 ${
+              currentStats.saldo_pendente > 0 ? 'text-amber-400' : 'text-green-400'
+            }`}>
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentStats.saldo_pendente)}
+            </p>
+            
+            <div className="flex items-center gap-2">
+              {currentStats.saldo_pendente <= 0 ? (
+                <>
+                  <CheckCircle size={12} className="text-green-400" />
+                  <span className="text-xs text-green-400 font-semibold">Tudo Quitado</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={12} className="text-amber-400" />
+                  <span className="text-xs text-amber-400 font-semibold">Aguardando Pagamento</span>
+                </>
+              )}
+            </div>
+          </div>
+        </motion.div>
       </div>
+
+      {/* Resumo Visual Adicional */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-2xl p-6"
+      >
+        <h3 className="text-sm uppercase tracking-wider text-white/60 font-semibold mb-4">Resumo Financeiro</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+          <div className="space-y-2">
+            <div className="text-2xl font-bold font-mono text-blue-400">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentStats.total_vendido)}
+            </div>
+            <div className="text-xs text-white/50">Total Vendido</div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="text-2xl font-bold font-mono text-green-400">
+              -{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentStats.total_recebido)}
+            </div>
+            <div className="text-xs text-white/50">Já Recebido</div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className={`text-2xl font-bold font-mono ${
+              currentStats.saldo_pendente > 0 ? 'text-amber-400' : 'text-green-400'
+            }`}>
+              ={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentStats.saldo_pendente)}
+            </div>
+            <div className="text-xs text-white/50">Saldo Pendente</div>
+          </div>
+        </div>
+        
+        {/* Barra de Progresso Global */}
+        {currentStats.total_vendido > 0 && (
+          <div className="mt-6">
+            <div className="flex justify-between text-xs text-white/60 mb-2">
+              <span>Progresso dos Recebimentos</span>
+              <span>{Math.round((currentStats.total_recebido / currentStats.total_vendido) * 100)}%</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min((currentStats.total_recebido / currentStats.total_vendido) * 100, 100)}%` }}
+                transition={{ duration: 1.5, ease: 'easeOut' }}
+                className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full"
+              />
+            </div>
+          </div>
+        )}
+      </motion.div>
 
       <motion.div 
         initial={{ opacity: 0, y: 10 }}
@@ -517,21 +715,38 @@ function CustomerDashboard({ user, onNotify }: { user: User; onNotify: (msg: str
   const loadData = async () => {
     setLoading(true);
     try {
-      const [vendasData, pagamentosData, balanceData] = await Promise.all([
+      const [vendasData, pagamentosData] = await Promise.all([
         db.getVendasByCliente(user.id),
-        db.getPagamentosByCliente(user.id),
-        db.getCustomerBalance(user.id)
+        db.getPagamentosByCliente(user.id)
       ]);
       
       setVendas(vendasData as Venda[]);
       setPagamentos(pagamentosData as Pagamento[]);
-      setBalance(balanceData);
+      
+      // CALCULAR TOTAIS MANUALMENTE (CORREÇÃO DEFINITIVA)
+      const totalComprado = vendasData.reduce((sum, venda) => sum + Number(venda.valor_total), 0);
+      const totalPago = pagamentosData.reduce((sum, pagamento) => sum + Number(pagamento.valor_pago), 0);
+      const saldoDevedor = totalComprado - totalPago;
+      
+      // Criar objeto balance com valores corretos
+      const balanceCorreto = {
+        cliente_id: user.id,
+        cliente_nome: user.display_name,
+        cliente_email: user.email,
+        total_comprado: totalComprado,
+        total_pago: totalPago,
+        saldo_devedor: saldoDevedor
+      };
+      
+      setBalance(balanceCorreto);
+      
     } catch (error) {
       onNotify('Erro ao carregar dados', 'error');
     } finally {
       setLoading(false);
     }
   };
+
 
   const filteredVendas = vendas.filter(v => 
     v.descricao.toLowerCase().includes(searchTerm.toLowerCase())
@@ -550,10 +765,13 @@ function CustomerDashboard({ user, onNotify }: { user: User; onNotify: (msg: str
         animate={{ opacity: 1, x: 0 }}
         className="col-span-12 lg:col-span-4 space-y-6"
       >
-        <h3 className="text-sm uppercase tracking-wider text-white/60 font-semibold">Sua Transparência</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm uppercase tracking-wider text-white/60 font-semibold">Sua Transparência</h3>
+        </div>
+        
         <motion.div 
           whileHover={{ scale: 1.02 }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#c5a059] via-[#d4af37] to-[#e5c158] p-8 shadow-2xl shadow-[#c5a059]/40 border border-[#e5c158]/50"
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#c5a059] via-[#d4af37] to-[#e5c158] p-5 sm:p-8 shadow-2xl shadow-[#c5a059]/40 border border-[#e5c158]/50"
         >
           {/* Decorative circles */}
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
@@ -567,19 +785,119 @@ function CustomerDashboard({ user, onNotify }: { user: User; onNotify: (msg: str
               </p>
             </div>
             
-            <div className="bg-black/10 backdrop-blur-sm p-6 rounded-xl border border-black/10 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs uppercase font-bold tracking-wider text-black/60">Saldo Devedor</span>
-                <span className="text-xl font-bold text-black">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.saldo_devedor || 0)}
-                </span>
+            {/* RESUMO FINANCEIRO MELHORADO */}
+            <div className="space-y-4">
+              {/* Total das Compras */}
+              <div className="bg-black/10 backdrop-blur-sm p-4 rounded-xl border border-black/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0"></div>
+                  <span className="text-xs uppercase font-bold tracking-wider text-black/60">Total das Compras</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-bold text-black font-mono">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.total_comprado || 0)}
+                  </span>
+                  <span className="text-xs text-black/50">
+                    {vendas.length} {vendas.length === 1 ? 'item' : 'itens'}
+                  </span>
+                </div>
               </div>
-              <div className="h-px bg-black/10"></div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs uppercase font-bold tracking-wider text-black/60">Já Liquidado</span>
-                <span className="text-xl font-bold text-black">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.total_pago || 0)}
-                </span>
+
+              {/* Valor Já Pago */}
+              <div className="bg-black/10 backdrop-blur-sm p-4 rounded-xl border border-black/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-600 flex-shrink-0"></div>
+                  <span className="text-xs uppercase font-bold tracking-wider text-black/60">Já Pago</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-bold text-green-800 font-mono">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.total_pago || 0)}
+                  </span>
+                  <span className="text-xs text-black/50">
+                    {pagamentos.length} {pagamentos.length === 1 ? 'pagamento' : 'pagamentos'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Saldo Restante */}
+              <div className="bg-gradient-to-r from-black/20 to-black/10 backdrop-blur-sm p-4 rounded-xl border-2 border-black/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-3 h-3 rounded-full bg-red-600 animate-pulse flex-shrink-0"></div>
+                  <span className="text-xs uppercase font-bold tracking-wider text-black/70">Saldo Restante</span>
+                </div>
+                <div className="flex items-baseline justify-between mb-3">
+                  <span className={`text-2xl font-bold font-mono ${(balance?.saldo_devedor || 0) <= 0 ? 'text-green-700' : 'text-red-800'}`}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.saldo_devedor || 0)}
+                  </span>
+                </div>
+                
+                {/* Barra de Progresso */}
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs text-black/60 mb-2">
+                    <span>Progresso do Pagamento</span>
+                    <span>
+                      {balance?.total_comprado > 0 
+                        ? Math.round(((balance?.total_pago || 0) / (balance?.total_comprado || 1)) * 100)
+                        : 0
+                      }%
+                    </span>
+                  </div>
+                  <div className="w-full bg-black/20 rounded-full h-3 overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ 
+                        width: balance?.total_comprado > 0 
+                          ? `${Math.min(((balance?.total_pago || 0) / (balance?.total_comprado || 1)) * 100, 100)}%`
+                          : '0%'
+                      }}
+                      transition={{ duration: 1.5, ease: 'easeOut' }}
+                      className="h-full bg-gradient-to-r from-green-600 to-green-500 rounded-full shadow-lg"
+                    />
+                  </div>
+                </div>
+
+                {/* Status do Pagamento */}
+                <div className="flex items-center gap-2">
+                  {(balance?.saldo_devedor || 0) <= 0 ? (
+                    <>
+                      <CheckCircle size={16} className="text-green-700" />
+                      <span className="text-xs font-semibold text-green-700">Totalmente Quitado</span>
+                    </>
+                  ) : (balance?.total_pago || 0) > 0 ? (
+                    <>
+                      <AlertCircle size={16} className="text-amber-700" />
+                      <span className="text-xs font-semibold text-amber-700">Pagamento Parcial</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle size={16} className="text-red-700" />
+                      <span className="text-xs font-semibold text-red-700">Pendente de Pagamento</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Resumo Rápido */}
+              <div className="bg-black/5 backdrop-blur-sm p-4 rounded-xl border border-black/5 space-y-3">
+                <div className="text-xs text-black/60 font-semibold uppercase tracking-wider">Resumo</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-black/60">Total comprado</span>
+                  <span className="text-sm font-bold text-black font-mono">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.total_comprado || 0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-black/10 pt-2">
+                  <span className="text-xs font-semibold text-black/60">Já pago</span>
+                  <span className="text-sm font-bold text-green-700 font-mono">
+                    − {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.total_pago || 0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-black/20 pt-2">
+                  <span className="text-xs font-bold text-black/70 uppercase tracking-wide">Restante</span>
+                  <span className={`text-sm font-bold font-mono ${(balance?.saldo_devedor || 0) <= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    = {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balance?.saldo_devedor || 0)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -604,8 +922,8 @@ function CustomerDashboard({ user, onNotify }: { user: User; onNotify: (msg: str
             className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all"
           />
         </div>
-        <RecentList title="Suas Compras" items={filteredVendas} type="venda" />
-        <RecentList title="Seus Pagamentos" items={filteredPagamentos} type="pagamento" />
+        <RecentList title="Suas Compras" items={filteredVendas} type="venda" context="customer" />
+        <RecentList title="Seus Pagamentos" items={filteredPagamentos} type="pagamento" context="customer" />
       </motion.div>
     </div>
   );
@@ -617,55 +935,125 @@ function CustomerDashboard({ user, onNotify }: { user: User; onNotify: (msg: str
 
 function FormAddVenda({ vendedorId, clientes, onClose, onNotify }: { vendedorId: string; clientes: any[]; onClose: () => void; onNotify: (msg: string, type: 'success' | 'error' | 'info') => void }) {
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    clienteId: '',
+    valor: '',
+    descricao: '',
+    data: new Date().toISOString().split('T')[0]
+  });
+
+  const { errors, validateForm, validateSingleField, touchField } = useFormValidation({
+    clienteId: [{ required: true, message: 'Cliente é obrigatório' }],
+    valor: commonValidationRules.currency,
+    descricao: commonValidationRules.description,
+    data: []
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    if (!validateForm(formData)) {
+      onNotify('Por favor, corrija os erros no formulário', 'error');
+      return;
+    }
+
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
     
     try {
       await db.createVenda({
-        descricao: formData.get('descricao') as string,
-        valor_total: Number(formData.get('valor')),
-        cliente_id: formData.get('clienteId') as string,
+        descricao: formData.descricao,
+        valor_total: masks.currencyToNumber(formData.valor),
+        cliente_id: formData.clienteId,
         vendedor_id: vendedorId,
-        data: (formData.get('data') as string) ? `${formData.get('data')}T12:00:00Z` : undefined
+        data: formData.data ? `${formData.data}T12:00:00Z` : undefined
       });
-      onNotify('Venda registrada!', 'success');
+      onNotify('Venda registrada com sucesso!', 'success');
       onClose();
-    } catch (error) {
-      onNotify('Erro ao registrar venda', 'error');
+    } catch (error: any) {
+      onNotify(error.message || 'Erro ao registrar venda', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleFieldChange = (field: string, value: string, unmaskedValue?: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    touchField(field);
+    validateSingleField(field, field === 'valor' ? unmaskedValue || value : value);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Cliente</label>
-        <select name="clienteId" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20">
+        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+          Cliente <span className="text-rose-400">*</span>
+        </label>
+        <select 
+          value={formData.clienteId}
+          onChange={(e) => handleFieldChange('clienteId', e.target.value)}
+          className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+            errors.clienteId ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+          }`}
+        >
           <option value="">Selecione um cliente</option>
           {clientes.map(c => (
             <option key={c.id} value={c.id} className="bg-[#141416]">{c.display_name}</option>
           ))}
         </select>
+        {errors.clienteId && (
+          <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+            {errors.clienteId}
+          </p>
+        )}
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <MaskedInput
+          mask="currency"
+          value={formData.valor}
+          onChange={(value, unmasked) => handleFieldChange('valor', value, unmasked)}
+          label="Valor"
+          placeholder="R$ 0,00"
+          required
+          error={errors.valor}
+        />
+        
         <div className="space-y-2">
-          <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Valor</label>
-          <input type="number" name="valor" step="0.01" required placeholder="0,00" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-lg text-white placeholder:text-white/20 transition-all hover:border-white/20 font-mono" />
-        </div>
-        <div className="space-y-2">
-          <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Descrição</label>
-          <input type="text" name="descricao" required placeholder="Ex: Venda #01" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20" />
+          <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+            Descrição <span className="text-rose-400">*</span>
+          </label>
+          <input 
+            type="text" 
+            value={formData.descricao}
+            onChange={(e) => handleFieldChange('descricao', e.target.value)}
+            placeholder="Ex: Venda #01" 
+            className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+              errors.descricao ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+            }`}
+          />
+          {errors.descricao && (
+            <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+              <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+              {errors.descricao}
+            </p>
+          )}
         </div>
       </div>
       
       <div className="space-y-2">
         <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Data (Opcional)</label>
-        <input type="date" name="data" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20" style={{ colorScheme: 'dark' }} />
+        <input 
+          type="date" 
+          value={formData.data}
+          onChange={(e) => handleFieldChange('data', e.target.value)}
+          className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20" 
+          style={{ colorScheme: 'dark' }} 
+        />
       </div>
       
       <motion.button 
@@ -683,73 +1071,154 @@ function FormAddVenda({ vendedorId, clientes, onClose, onNotify }: { vendedorId:
 
 function FormAddPagamento({ vendedorId, clientes, vendas, onClose, onNotify }: { vendedorId: string; clientes: any[]; vendas: Venda[]; onClose: () => void; onNotify: (msg: string, type: 'success' | 'error' | 'info') => void }) {
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    clienteId: '',
+    vendaId: '',
+    valor: '',
+    descricao: '',
+    data: new Date().toISOString().split('T')[0]
+  });
+
+  const { errors, validateForm, validateSingleField, touchField } = useFormValidation({
+    clienteId: [{ required: true, message: 'Cliente é obrigatório' }],
+    valor: commonValidationRules.currency,
+    descricao: [
+      { required: true, message: 'Descrição é obrigatória' },
+      { minLength: 3, message: 'Descrição deve ter pelo menos 3 caracteres' },
+      { maxLength: 500, message: 'Descrição deve ter no máximo 500 caracteres' }
+    ]
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    if (!validateForm(formData)) {
+      onNotify('Por favor, corrija os erros no formulário', 'error');
+      return;
+    }
+
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
-    const vendaId = formData.get('vendaId') as string;
     
     try {
       await db.createPagamento({
-        valor_pago: Number(formData.get('valor')),
-        descricao: (formData.get('descricao') as string) || 'Pagamento recebido',
-        cliente_id: formData.get('clienteId') as string,
+        valor_pago: masks.currencyToNumber(formData.valor),
+        descricao: formData.descricao || 'Pagamento recebido',
+        cliente_id: formData.clienteId,
         vendedor_id: vendedorId,
-        venda_id: vendaId || undefined,
-        data: (formData.get('data') as string) ? `${formData.get('data')}T12:00:00Z` : undefined
+        venda_id: formData.vendaId || undefined,
+        data: formData.data ? `${formData.data}T12:00:00Z` : undefined
       });
 
-      if (vendaId) {
-        await db.updateVendaStatus(vendaId, 'paga');
+      if (formData.vendaId) {
+        const selectedVenda = vendas.find(v => v.id === formData.vendaId);
+        const valorPago = masks.currencyToNumber(formData.valor);
+        const newStatus = selectedVenda && valorPago >= Number(selectedVenda.valor_total) ? 'paga' : 'parcial';
+        await db.updateVendaStatus(formData.vendaId, newStatus);
       }
 
-      onNotify('Pagamento registrado!', 'success');
+      onNotify('Pagamento registrado com sucesso!', 'success');
       onClose();
-    } catch (error) {
-      onNotify('Erro ao registrar pagamento', 'error');
+    } catch (error: any) {
+      onNotify(error.message || 'Erro ao registrar pagamento', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleFieldChange = (field: string, value: string, unmaskedValue?: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    touchField(field);
+    validateSingleField(field, field === 'valor' ? unmaskedValue || value : value);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Cliente</label>
-        <select name="clienteId" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20">
+        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+          Cliente <span className="text-rose-400">*</span>
+        </label>
+        <select 
+          value={formData.clienteId}
+          onChange={(e) => handleFieldChange('clienteId', e.target.value)}
+          className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+            errors.clienteId ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+          }`}
+        >
           <option value="">Selecione um cliente</option>
           {clientes.map(c => (
             <option key={c.id} value={c.id} className="bg-[#141416]">{c.display_name}</option>
           ))}
         </select>
+        {errors.clienteId && (
+          <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+            {errors.clienteId}
+          </p>
+        )}
       </div>
       
       {vendas.length > 0 && (
         <div className="space-y-2">
           <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Venda (Opcional)</label>
-          <select name="vendaId" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20">
+          <select 
+            value={formData.vendaId}
+            onChange={(e) => handleFieldChange('vendaId', e.target.value)}
+            className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20"
+          >
             <option value="">Pagamento geral</option>
             {vendas.map(v => (
-              <option key={v.id} value={v.id} className="bg-[#141416]">{v.descricao} - R$ {v.valor_total}</option>
+              <option key={v.id} value={v.id} className="bg-[#141416]">
+                {v.descricao} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v.valor_total)}
+              </option>
             ))}
           </select>
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Valor</label>
-        <input type="number" name="valor" step="0.01" required placeholder="0,00" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-lg text-white placeholder:text-white/20 transition-all hover:border-white/20 font-mono" />
-      </div>
+      <MaskedInput
+        mask="currency"
+        value={formData.valor}
+        onChange={(value, unmasked) => handleFieldChange('valor', value, unmasked)}
+        label="Valor"
+        placeholder="R$ 0,00"
+        required
+        error={errors.valor}
+      />
       
       <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Descrição</label>
-        <input type="text" name="descricao" placeholder="Ex: Transferência" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20" />
+        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+          Descrição <span className="text-rose-400">*</span>
+        </label>
+        <input 
+          type="text" 
+          value={formData.descricao}
+          onChange={(e) => handleFieldChange('descricao', e.target.value)}
+          placeholder="Ex: Transferência PIX" 
+          className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+            errors.descricao ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+          }`}
+        />
+        {errors.descricao && (
+          <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+            {errors.descricao}
+          </p>
+        )}
       </div>
       
       <div className="space-y-2">
         <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Data (Opcional)</label>
-        <input type="date" name="data" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20" style={{ colorScheme: 'dark' }} />
+        <input 
+          type="date" 
+          value={formData.data}
+          onChange={(e) => handleFieldChange('data', e.target.value)}
+          className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white transition-all hover:border-white/20" 
+          style={{ colorScheme: 'dark' }} 
+        />
       </div>
       
       <motion.button 
@@ -767,43 +1236,120 @@ function FormAddPagamento({ vendedorId, clientes, vendas, onClose, onNotify }: {
 
 function FormAddCliente({ vendedorId, onClose, onNotify }: { vendedorId: string; onClose: () => void; onNotify: (msg: string, type: 'success' | 'error' | 'info') => void }) {
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: ''
+  });
+
+  const { errors, validateForm, validateSingleField, touchField } = useFormValidation({
+    name: commonValidationRules.name,
+    email: commonValidationRules.email,
+    password: commonValidationRules.strongPassword
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    if (!validateForm(formData)) {
+      onNotify('Por favor, corrija os erros no formulário', 'error');
+      return;
+    }
+
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
 
     try {
       await db.createCliente({
-        email: formData.get('email') as string,
-        password: formData.get('password') as string,
-        display_name: formData.get('name') as string,
+        email: formData.email,
+        password: formData.password,
+        display_name: formData.name,
         vendedor_id: vendedorId
       });
-      onNotify('Cliente criado!', 'success');
+      onNotify('Cliente criado com sucesso!', 'success');
       onClose();
-    } catch (error) {
-      onNotify('Erro ao criar cliente', 'error');
+    } catch (error: any) {
+      onNotify(error.message || 'Erro ao criar cliente', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    touchField(field);
+    validateSingleField(field, value);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Nome</label>
-        <input type="text" name="name" required placeholder="Nome Completo" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20" />
+        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+          Nome Completo <span className="text-rose-400">*</span>
+        </label>
+        <input 
+          type="text" 
+          value={formData.name}
+          onChange={(e) => handleFieldChange('name', e.target.value)}
+          placeholder="Nome Completo" 
+          className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+            errors.name ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+          }`}
+        />
+        {errors.name && (
+          <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+            {errors.name}
+          </p>
+        )}
       </div>
       
       <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Email</label>
-        <input type="email" name="email" required placeholder="email@exemplo.com" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20" />
+        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+          Email <span className="text-rose-400">*</span>
+        </label>
+        <input 
+          type="email" 
+          value={formData.email}
+          onChange={(e) => handleFieldChange('email', e.target.value.toLowerCase())}
+          placeholder="email@exemplo.com" 
+          className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+            errors.email ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+          }`}
+        />
+        {errors.email && (
+          <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+            {errors.email}
+          </p>
+        )}
       </div>
       
       <div className="space-y-2">
-        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Senha Inicial</label>
-        <input type="password" name="password" required placeholder="Senha para o cliente" className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-[#c5a059] focus:bg-white/[0.08] text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20" />
+        <label className="block text-xs uppercase tracking-wider font-semibold text-[#c5a059]">
+          Senha Inicial <span className="text-rose-400">*</span>
+        </label>
+        <input 
+          type="password" 
+          value={formData.password}
+          onChange={(e) => handleFieldChange('password', e.target.value)}
+          placeholder="Senha segura para o cliente" 
+          className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm text-white placeholder:text-white/20 transition-all hover:border-white/20 focus:bg-white/[0.08] ${
+            errors.password ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-[#c5a059]'
+          }`}
+        />
+        {errors.password && (
+          <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-rose-400"></span>
+            {errors.password}
+          </p>
+        )}
+        <p className="text-xs text-white/40 mt-2">
+          A senha deve ter pelo menos 8 caracteres, incluindo maiúscula, minúscula e número
+        </p>
       </div>
       
       <motion.button 
